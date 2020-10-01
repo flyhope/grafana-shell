@@ -22,6 +22,8 @@ type hookAlert struct {
 	Title    string `json:"title"`
 }
 
+var webhookLockChan = make(chan bool, 1)
+
 // basicAuth
 func basicAuth() gin.HandlerFunc {
 	return gin.BasicAuth(gin.Accounts{
@@ -31,6 +33,17 @@ func basicAuth() gin.HandlerFunc {
 
 // grafana webhook handler
 func handlerWebhook(c *gin.Context) {
+	select {
+	case webhookLockChan <- true:
+		defer func() {
+			<-webhookLockChan
+		}()
+		break
+	default:
+		logrus.WithFields(logrus.Fields{"controller": "webhook"}).Warnln("busy")
+		return
+	}
+
 	// parse json
 	data := new(hookAlert)
 	err := c.BindJSON(data)
